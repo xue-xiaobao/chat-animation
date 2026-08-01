@@ -21,7 +21,7 @@ Turn one idea, article, question, or reference into a complete narrated explaine
 
 ![Paradox of Thrift contact sheet](assets/paradox-of-thrift-contact-sheet.jpg)
 
-▶️ [Watch the 12-second MP4 demo](assets/paradox-of-thrift-demo.mp4)
+https://github.com/user-attachments/assets/b02f0520-e2f9-4368-8504-84276eff1d2f
 
 ## Install in 30 seconds
 
@@ -39,6 +39,22 @@ npx skills add xue-xiaobao/chat-animation --skill chat-animation -g -a codex -y
 
 Restart the agent or open a new session after installation, then describe the animation you want. If Node.js is unavailable, use the manual copy instructions below.
 
+### Ask your agent to install it
+
+If you do not want to use a terminal, copy the complete prompt below into Codex, Claude Code, WorkBuddy, Hermes, or another Skill-aware agent:
+
+```text
+Install the chat-animation Skill from https://github.com/xue-xiaobao/chat-animation.
+
+Requirements:
+1. Read README.md and skills/chat-animation/SKILL.md before installing.
+2. Install skills/chat-animation into your current agent's user-level Skill directory without modifying the Skill itself.
+3. Check that Python 3.9+, FFmpeg, and FFprobe are available.
+4. Never write real API keys into chat, logs, or the repository.
+5. After installation, run preflight only. Do not submit paid image, video, or speech generation jobs.
+6. Report the install path, check results, and which API keys I still need to configure.
+```
+
 ## Supported agents
 
 Chat Animation follows the standard `SKILL.md` directory layout. Its core workflow only requires an agent that can read files, run Python, and use a terminal.
@@ -54,6 +70,27 @@ Chat Animation follows the standard `SKILL.md` directory layout. Its core workfl
 | OpenCode | Format compatible | `skills` CLI: `-a opencode` |
 
 “Format compatible” means the directory layout and runtime requirements match that agent's Skill mechanism. This release's real end-to-end production regression was completed on Codex. Tool names, permissions, and credential setup can vary across agents.
+
+## How it works
+
+Chat Animation does not generate an entire video in one opaque request. It divides production into five layers. Every layer has structured artifacts, automated checks, and an approval record; downstream work starts only after its upstream contract is accepted. The three expensive layers—visual, motion, and voice—produce one sample before batch generation by default.
+
+| Layer | Responsibility | Default model or tool | Human responsibility |
+| --- | --- | --- | --- |
+| 1. Direction | Research the topic; define the thesis, narrative, scene narration, visual metaphors, and transition plan | The current agent's language model, with authoritative research for professional or time-sensitive claims | Confirm that the narration works without visuals, facts are accurate, and scenes deserve production |
+| 2. Visual | Generate meaningful static keyframes that lock style, composition, and subject relationships | `agnes-image-2.1-flash` | Review one keyframe sample, then inspect style, composition, anatomy, and unwanted text across the batch |
+| 3. Motion | Generate scene motion and transitions from a first frame, end frame, and English motion prompt | `agnes-video-v2.0`, 1280×720, 24 fps, keyframes mode | Review one full motion sample for reference fidelity, deformation, motion amplitude, and transition rhythm |
+| 4. Voice | Generate per-scene narration with a preset or authorized cloned voice | `mimo-v2.5-tts` or `mimo-v2.5-tts-voiceclone` | Choose the voice source and approve a sample for timbre, pace, emotion, and pauses |
+| 5. Composition | Retimes visuals to narration, joins scenes and transitions, renders captions, and exports the MP4 | Local FFmpeg / FFprobe; no generative model | Review the final story, synchronization, captions, transitions, and overall viewing experience |
+
+Core operating principles:
+
+1. **Direct before generating:** make the argument and narration clear before spending image, video, or voice credits.
+2. **Keyframes constrain motion:** animate from approved visual states instead of asking text-to-video to guess the composition.
+3. **Plan transitions early:** choose hard cuts, dedicated transitions, or fused transitions; one-second dedicated transitions are the default.
+4. **Narration is the master clock:** preserve natural speech and retime silent visuals instead of accelerating the voice.
+5. **Keep humans in the loop:** the agent self-checks every layer and waits for approval by default; explicit full-auto mode is also available.
+6. **Resume and revise locally:** preserve prompts, task IDs, hashes, approvals, and intermediate media so interrupted jobs can resume and one scene can be replaced independently.
 
 ## What it does
 
@@ -162,9 +199,33 @@ project_01/
 
 The default final format is 1280×720, 24 fps, H.264 video with AAC narration. See the complete workflow in [`SKILL.md`](skills/chat-animation/SKILL.md).
 
-## Using the scripts without Codex
+## FAQ
 
-The Agnes, MiMo, validation, and FFmpeg adapters are ordinary Python scripts. They do not technically require Codex. However, without a Skill-aware agent you must prepare the project contracts, narration, prompts, approvals, and QA manually. This repository is therefore an agent workflow first, not yet a one-command consumer application.
+### Does it cost money?
+
+The Skill itself is free to install and is released under the MIT License. Production may involve three external costs: your agent or language model, Agnes image/video generation, and Xiaomi MiMo speech generation. Python, FFmpeg, and local composition are free. Refer to each provider's console for current prices and balances.
+
+### How many tokens does it use?
+
+There is no fixed number. Direction, research, revisions, and agent conversations consume language-model tokens. Agnes image/video jobs and MiMo speech use their own task, duration, or credit billing rather than the agent's text-token meter. Cost is driven mainly by scene count, animation duration, and retries. The default sample-before-batch gates are designed to prevent avoidable usage.
+
+### How do I install it?
+
+The recommended command is:
+
+```bash
+npx skills add xue-xiaobao/chat-animation --skill chat-animation -g
+```
+
+You can also paste the “Ask your agent to install it” prompt above into your agent, or manually copy `skills/chat-animation` into its user-level Skill directory. Run `preflight` afterward and configure the Agnes and MiMo API keys it requests.
+
+### How do I use it?
+
+Restart your agent after installation, then describe the subject, audience, duration, and style. For example:
+
+> Use `$chat-animation` to make a one-minute Vox-style explainer about the paradox of thrift for adults with no economics background. Let me review every stage.
+
+By default, you review direction, a visual sample, a motion sample, a voice sample, and the final video. Waiting gates are skipped only when you explicitly request full-auto production with all human approvals skipped.
 
 ## License
 

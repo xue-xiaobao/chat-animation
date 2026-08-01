@@ -21,7 +21,7 @@
 
 ![节俭悖论视频画面总览](assets/paradox-of-thrift-contact-sheet.jpg)
 
-▶️ [观看 12 秒 MP4 演示](assets/paradox-of-thrift-demo.mp4)
+https://github.com/user-attachments/assets/b02f0520-e2f9-4368-8504-84276eff1d2f
 
 ## 30 秒安装
 
@@ -39,6 +39,22 @@ npx skills add xue-xiaobao/chat-animation --skill chat-animation -g -a codex -y
 
 安装后重新启动 Agent 或新建会话，然后直接提出动画需求即可。没有 Node.js 时，也可以在下方使用手动复制方式。
 
+### 让你的 Agent 帮你安装
+
+不想使用命令行时，把下面这段提示词完整复制给 Codex、Claude Code、WorkBuddy、Hermes 或其他支持 Skill 的 Agent：
+
+```text
+请从 https://github.com/xue-xiaobao/chat-animation 安装 chat-animation Skill。
+
+要求：
+1. 阅读仓库的 README.md 和 skills/chat-animation/SKILL.md，确认安装内容。
+2. 把 skills/chat-animation 安装到你当前 Agent 的用户级 Skill 目录，不要修改 Skill 本体。
+3. 检查 Python 3.9+、FFmpeg 和 FFprobe 是否可用。
+4. 不要在聊天、日志或仓库中写入真实 API Key。
+5. 安装完成后只运行 preflight；不要提交图片、视频或语音等付费生成任务。
+6. 最后告诉我安装位置、检查结果，以及还需要我配置哪些 API Key。
+```
+
 ## 支持的 Agent
 
 Chat Animation 遵循标准 `SKILL.md` 目录结构，核心流程只依赖 Agent 能够读取文件、执行 Python 和调用终端。
@@ -54,6 +70,27 @@ Chat Animation 遵循标准 `SKILL.md` 目录结构，核心流程只依赖 Agen
 | OpenCode | 标准兼容 | `skills` CLI：`-a opencode` |
 
 “标准兼容”表示目录格式和运行依赖匹配该 Agent 的 Skill 机制；当前版本的真实端到端生产回归在 Codex 完成。不同 Agent 的工具名称、权限与密钥配置界面可能不同。
+
+## 工作原理
+
+Chat Animation 不是一次性生成整条视频，而是把生产过程拆成五层。每层都有结构化产物、自动检查和审批记录；上游确认后，下游才会开始。图片、视频和声音三个高成本阶段默认先生成一个样片，用户确认后再批量生产。
+
+| 层级 | 负责什么 | 默认模型或工具 | 人在环节里做什么 |
+| --- | --- | --- | --- |
+| 1. 编导层 | 研究主题，确定结论、叙事结构、逐镜台词、视觉隐喻和转场计划 | 当前 Agent 使用的语言模型；专业或时效内容会配合权威资料检索 | 审核“只听台词能否听懂”、事实是否准确、分镜是否值得继续制作 |
+| 2. 视觉层 | 按运动计划生成有内容的静态关键帧，固定风格、构图和主体关系 | `agnes-image-2.1-flash` | 先审核一组静帧样片，再检查批量画面的画风、构图、手部和文字错误 |
+| 3. 运动层 | 使用首帧、尾帧和英文动作提示词生成内容动画与场景转场 | `agnes-video-v2.0`，1280×720、24fps、keyframes 模式 | 先审核一段完整动画，确认动作幅度、参考图保持、变形和转场节奏 |
+| 4. 声音层 | 按镜生成中文口播，支持预置音色与已授权的用户音色 | `mimo-v2.5-tts` 或 `mimo-v2.5-tts-voiceclone` | 选择声音来源，试听一段，确认音色、语速、情绪和停顿 |
+| 5. 合成层 | 以口播为时钟对齐画面，拼接镜头、转场和字幕，输出最终 MP4 | 本地 FFmpeg / FFprobe，不使用生成模型 | 审核最终成片的内容、音画同步、字幕、转场和整体观看体验 |
+
+核心运作逻辑：
+
+1. **编导先于生成：** 先把观点和台词讲清楚，再花费图片、视频和声音额度。
+2. **静态帧约束动画：** 动画使用首尾关键帧，不用纯文本视频随机猜测构图。
+3. **转场提前规划：** 支持硬切、独立转场和融合转场，默认使用一秒独立转场。
+4. **口播是最终时钟：** 保持人声自然，通过画面变速匹配音频，而不是加速口播迁就视频。
+5. **人在环路中：** 默认每层由 Agent 自检、用户确认；用户明确要求时也可以全自动运行。
+6. **可以恢复和局部返工：** 项目保存提示词、任务 ID、哈希、审批和中间素材，断网后可恢复，单镜失败只重做单镜。
 
 ## 它能做什么？
 
@@ -162,9 +199,33 @@ project_01/
 
 默认成片规格是 1280×720、24fps、H.264 视频和 AAC 音频。完整工作流见 [`SKILL.md`](skills/chat-animation/SKILL.md)。
 
-## 没有 Codex 能否使用？
+## FAQ
 
-Agnes、MiMo、验证和 FFmpeg 适配器都是普通 Python 脚本，技术上不依赖 Codex。但没有能够执行 Skill 的 Agent 时，用户必须自己准备项目契约、台词、提示词、审批记录和质量检查。因此它目前首先是一套 Agent 工作流，还不是面向普通用户的一键应用。
+### 是否要收费？
+
+Skill 本身使用 MIT License，下载安装到本地不收费。实际制作时可能产生三类外部费用：你所使用的 Agent 或语言模型、Agnes 图片/视频生成、Xiaomi MiMo 语音生成。Python、FFmpeg 和本地合成不收费。具体单价和余额以各服务商控制台为准。
+
+### 消耗多少 Token？
+
+没有固定值。编导、资料研究、修改轮次和 Agent 对话会消耗语言模型 Token；Agnes 的图片与视频、MiMo 的语音通常按各自平台的任务、时长或额度规则计费，不等同于 Agent 的文本 Token。成本主要受镜头数量、动画时长和返工次数影响。默认的“先做一个样片再批量生成”就是为了减少无效消耗。
+
+### 如何安装？
+
+推荐运行：
+
+```bash
+npx skills add xue-xiaobao/chat-animation --skill chat-animation -g
+```
+
+也可以把上方“让你的 Agent 帮你安装”提示词复制给 Agent，或手动把 `skills/chat-animation` 复制到对应的用户级 Skill 目录。安装后运行 `preflight`，按提示配置 Agnes 与 MiMo API Key。
+
+### 如何使用？
+
+安装后重新打开 Agent，直接描述想讲的主题、受众、时长和风格，例如：
+
+> 使用 `$chat-animation` 制作一个一分钟的节俭悖论 Vox 风格科普动画，面向没有经济学基础的成年人，每个阶段让我确认。
+
+默认流程会依次让你确认编导、视觉样片、动画样片、声音样片和最终成片。只有明确提出“全自动完成并跳过所有审批”时，才会跳过等待确认。
 
 ## 开源许可
 
