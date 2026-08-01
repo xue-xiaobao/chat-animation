@@ -1,0 +1,20 @@
+.DS_Store
+Thumbs.db
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+.env
+.env.*
+!.env.example
+*.log
+.local/
+
+# Generated projects can contain paid outputs, voice references, and large media.
+chat-animation-projects/
+auth-smoke/

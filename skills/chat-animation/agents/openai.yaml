@@ -1,0 +1,4 @@
+interface:
+  display_name: "Chat Animation"
+  short_description: "支持三种转场策略、逐层审批和用户音色克隆的完整动画工作流"
+  default_prompt: "Use $chat-animation to create a narrated explainer with the appropriate hard-cut, dedicated-transition, or fused-transition strategy."

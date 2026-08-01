@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "default_style_id": "vox",
+  "styles": [
+    {
+      "id": "vox",
+      "version": "2.0",
+      "name": "Vox Style",
+      "aliases": [
+        "vox style",
+        "vox 风格",
+        "editorial-halftone-paper-collage",
+        "paper collage",
+        "editorial collage",
+        "halftone collage",
+        "纸拼贴",
+        "半调拼贴",
+        "贴纸动画"
+      ],
+      "reference": "references/style-vox.md",
+      "motion_strategy": "content-to-completed-keyframes",
+      "frame_policy": "distinct-first-end",
+      "frame_support": [
+        "16:9"
+      ]
+    },
+    {
+      "id": "storybook",
+      "version": "1.0",
+      "name": "storybook",
+      "aliases": [
+        "storybook style",
+        "storybook paper collage",
+        "彩色纸雕",
+        "故事书纸拼贴",
+        "纸雕贴纸"
+      ],
+      "reference": "references/style-storybook.md",
+      "motion_strategy": "same-frame-breathing-keyframes",
+      "frame_policy": "shared-hero-frame",
+      "frame_support": [
+        "16:9"
+      ]
+    }
+  ]
+}
