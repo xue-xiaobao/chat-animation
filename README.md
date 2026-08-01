@@ -2,10 +2,6 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![FFmpeg](https://img.shields.io/badge/FFmpeg-required-007808?logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
-[![Agent Skills](https://img.shields.io/badge/Agent_Skills-compatible-2563EB)](https://agentskills.io/specification)
-[![Self tests](https://img.shields.io/badge/self_tests-30_passed-16A34A)](skills/chat-animation/scripts/self_test.py)
-[![Workflow](https://img.shields.io/badge/workflow-reviewable%20%7C%20resumable-8b5cf6)](#为什么选择-chat-animation)
 
 [![Codex](https://img.shields.io/badge/Codex-E2E_verified-111827?logo=openai&logoColor=white)](https://developers.openai.com/codex/skills)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-compatible-D97757?logo=anthropic&logoColor=white)](https://code.claude.com/docs/en/skills)
