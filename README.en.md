@@ -71,6 +71,17 @@ Chat Animation follows the standard `SKILL.md` directory layout. Its core workfl
 
 “Format compatible” means the directory layout and runtime requirements match that agent's Skill mechanism. This release's real end-to-end production regression was completed on Codex. Tool names, permissions, and credential setup can vary across agents.
 
+## Animation styles
+
+Two production-tested 16:9 styles are built in. They are not mere image filters: each style changes the visual-metaphor rules, keyframe count, motion strategy, and QA criteria.
+
+| Style | Visual language | Keyframe and motion strategy | Best suited to |
+| --- | --- | --- | --- |
+| **Vox style** (`vox`, default) | Bold flat color fields, black-and-white halftone cut-outs, selective colored cardstock, cream keylines, and editorial-poster composition | Generates distinct but compositionally anchored first and last frames; paper groups assemble in causal order, then settle into one very slow breathing pulse | Financial mechanisms, cognitive biases, abstract concepts, and argument-led explainers |
+| **Storybook style** (`storybook`) | Warm layered cut-paper dioramas, sticker-like characters, soft shadows, and concrete everyday scenes | Generates one authoritative hero frame and reuses it as both keyframes; foreground pieces enter gently over about 1.2 seconds, then breathe subtly on an approximately four-second cycle | Children's education, fables, psychology, social concepts, and friendlier everyday explanations |
+
+Style selection follows “explicit user choice → closest reference material → default Vox.” The selected definition is snapshotted when a project is initialized, so later Skill updates cannot silently change an existing project. Ask for “Vox style” or “Storybook style” in the production request.
+
 ## How it works
 
 Chat Animation does not generate an entire video in one opaque request. It divides production into five layers. Every layer has structured artifacts, automated checks, and an approval record; downstream work starts only after its upstream contract is accepted. The three expensive layers—visual, motion, and voice—produce one sample before batch generation by default.
@@ -229,4 +240,6 @@ By default, you review direction, a visual sample, a motion sample, a voice samp
 
 ## License
 
-The repository is available under the [MIT License](LICENSE). Smiley Sans is not bundled; it is downloaded from its official release at initialization and remains under the SIL Open Font License 1.1. External models and services retain their own terms.
+The repository is available under the [MIT License](LICENSE). The editorial halftone paper-collage method in the Vox style was adapted and extended from the MIT-licensed [`pyang5166/gbro-collage-broll`](https://github.com/pyang5166/gbro-collage-broll); see [Third-Party Notices](skills/chat-animation/THIRD_PARTY_NOTICES.md) for the original copyright and license. “Vox style” describes a category of editorial visual language and does not imply affiliation with, endorsement by, or sponsorship from Vox Media.
+
+Smiley Sans is not bundled; it is downloaded from its official release at initialization and remains under the SIL Open Font License 1.1. External models and services retain their own terms.
