@@ -248,6 +248,10 @@ npx skills add xue-xiaobao/chat-animation --skill chat-animation -g
 
 默认流程会依次让你确认编导、视觉样片、动画样片、声音样片和最终成片。只有明确提出“全自动完成并跳过所有审批”时，才会跳过等待确认。
 
+## 合作与交流
+
+如果你想交流动画制作方法、反馈使用问题、参与项目合作或加入交流群，请访问我的[飞书知识库](https://my.feishu.cn/wiki/QYaZwVDeViLVIckWgggcJQChnLm)。其中包含联系方式和群聊二维码。
+
 ## 开源许可
 
 本仓库使用 [MIT License](LICENSE)。Vox 风格中的编辑半调纸拼贴方法参考并改写自 MIT 授权的 [`pyang5166/gbro-collage-broll`](https://github.com/pyang5166/gbro-collage-broll)，原始版权与许可见 [第三方声明](skills/chat-animation/THIRD_PARTY_NOTICES.md)。这里的“Vox 风格”是对一类编辑视觉语言的描述，不表示本项目与 Vox Media 存在隶属、合作或背书关系。

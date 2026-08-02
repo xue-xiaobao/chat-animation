@@ -252,6 +252,10 @@ Restart your agent after installation, then describe the subject, audience, dura
 
 By default, you review direction, a visual sample, a motion sample, a voice sample, and the final video. Waiting gates are skipped only when you explicitly request full-auto production with all human approvals skipped.
 
+## Collaboration & Community
+
+For production discussions, feedback, project collaboration, or the community group, visit my [Feishu knowledge base](https://my.feishu.cn/wiki/QYaZwVDeViLVIckWgggcJQChnLm). It includes contact details and the group-chat QR code.
+
 ## License
 
 The repository is available under the [MIT License](LICENSE). The editorial halftone paper-collage method in the Vox style was adapted and extended from the MIT-licensed [`pyang5166/gbro-collage-broll`](https://github.com/pyang5166/gbro-collage-broll); see [Third-Party Notices](skills/chat-animation/THIRD_PARTY_NOTICES.md) for the original copyright and license. “Vox style” describes a category of editorial visual language and does not imply affiliation with, endorsement by, or sponsorship from Vox Media.
