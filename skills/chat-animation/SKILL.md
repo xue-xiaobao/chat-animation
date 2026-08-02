@@ -1,6 +1,6 @@
 ---
 name: chat-animation
-description: "Turn a user’s idea, question, concept, article, or reference into a complete narrated explainer animation through a self-contained five-stage workflow. Supports hard cuts, dedicated transition animations, and fused motion transitions; defaults to one-second dedicated transitions with narration crossing the transition midpoint. Defaults to human review with one-scene samples before costly batches, and supports an explicitly authorized full-auto mode. Includes built-in style knowledge, Agnes image/video adapters, Xiaomi MiMo preset or cloned narration adapters, FFmpeg captions, and composition scripts. Use when the user asks to 制作动画、科普动画、概念讲解视频、纸拼贴或贴纸动画、转场动画、使用自己的音色讲解、全自动完成动画、把一个想法做成带口播字幕的 MP4，or wants a reviewable or automated resumable idea-to-video project."
+description: "Turn a user’s idea, question, concept, article, or reference into a complete narrated explainer animation through a self-contained five-stage workflow. Supports hard cuts, dedicated transition animations, and fused motion transitions; defaults to hard cuts, while explicitly selected dedicated transitions default to one second with narration crossing the transition midpoint. Defaults to human review with one-scene samples before costly batches, and supports an explicitly authorized full-auto mode. Includes built-in style knowledge, Agnes image/video adapters, Xiaomi MiMo preset or cloned narration adapters, FFmpeg captions, and composition scripts. Use when the user asks to 制作动画、科普动画、概念讲解视频、纸拼贴或贴纸动画、转场动画、使用自己的音色讲解、全自动完成动画、把一个想法做成带口播字幕的 MP4，or wants a reviewable or automated resumable idea-to-video project."
 ---
 
 # Chat Animation
@@ -9,7 +9,7 @@ description: "Turn a user’s idea, question, concept, article, or reference int
 
 ## 不可绕过的规则
 
-1. 首次动作必须是预检。Agnes 和 MiMo token 未同时配置时，停止生产并只引导配置。
+1. 首次动作必须是预检。与所选区域匹配的 Agnes Key 和 MiMo token 未同时配置时，停止生产并只引导配置。
 2. 严格按五阶段执行：编导 → 视觉 → 运动 → 声音 → 合成。
 3. 每阶段都必须先由 Agent 自检。`human-gated` 模式展示产物并等待人明确通过；`full-auto` 模式在验证通过后自动进入下一阶段。
 4. 默认使用人工 Gate。只有用户明确要求“全自动完成并跳过所有审批”时才启用 `full-auto`；全自动仍执行每阶段自检、确定性验证和产物留档。
@@ -18,7 +18,7 @@ description: "Turn a user’s idea, question, concept, article, or reference int
 7. 所有外部结果下载到项目目录；不要依赖临时 URL，不要保存或打印 token。
 8. `human-gated` 模式下，视觉、运动、声音三个高成本阶段必须先生产一镜样片并获得明确批准，之后才允许批量生产；样片批准不能替代该阶段的全量批准。`full-auto` 模式可跳过样片 Gate。
 9. 生产流程只显式指定本 Skill 的 `scripts/`、`references/` 和项目产物，不在流程文档、命令或用户交付中显式指定本目录之外的能力路由。
-10. 转场模式必须在编导层确定。默认使用 `transition-separated`，成片转场默认 1.0 秒；没有转场动画时才用 `hard-cut`，融合模式只在明确选择或低复杂度、低调用量优先时使用。
+10. 转场模式必须在编导层确定。默认使用 `hard-cut` 且转场时长为 0；用户明确选择动画转场时才生成过渡动画，独立转场成片默认 1.0 秒。
 
 ## 首次预检
 
@@ -30,7 +30,7 @@ python3 <skill>/scripts/project.py preflight
 
 要求：
 
-- `AGNES_API_KEY`（也兼容 `AGNES_API_TOKEN`、`APIHUB_AGNES_API_KEY`）
+- 国际站使用 `AGNES_GLOBAL_API_KEY`，CN 站使用 `AGNES_CN_API_KEY`；旧的 Agnes 变量继续作为国际站兼容别名
 - `MIMO_API_KEY`
 - Python 3.9+
 - FFmpeg 与 FFprobe
@@ -53,12 +53,13 @@ python3 <skill>/scripts/project.py init \
   --projects-root <用户指定或当前目录>/chat-animation-projects \
     --name <project-name> \
     --idea "<用户要求>" \
-    --style vox
+    --style vox \
+    --agnes-region global
 ```
 
 初始化同时从得意黑官方发布页下载固定版本 `v2.0.1` 到当前用户缓存，并校验压缩包与 TTF 的 SHA-256；字体文件不放进 Skill 包。若网络、GitHub 或校验失败，初始化继续进行并自动使用 Windows 的微软雅黑/黑体或 macOS 的苹方/黑体。最终选择写入 `state/font-selection.json`，详见 [fonts.md](references/fonts.md)。
 
-`--style` 可省略，默认读取内部风格注册表的默认项。同名项目自动使用 `_01`、`_02` 版本号。转场默认写入 `transition-separated` 和 `1.0` 秒；需要改为硬切或融合转场时使用 `--transition-mode`，需要调整动画转场时长时使用 `--transition-duration`。
+`--style` 可省略，默认读取内部风格注册表的默认项。同名项目自动使用 `_01`、`_02` 版本号。`--agnes-region` 选择 `global` 或 `cn`，并把对应域名固化到项目；只有一套 Key 时可自动选择，两套 Key 同时存在时必须明确指定。转场默认写入 `hard-cut` 和 `0` 秒；需要动画转场时使用 `--transition-mode transition-separated` 或 `transition-fused`，需要调整动画转场时长时使用 `--transition-duration`。
 
 ## 审批模式
 
@@ -223,7 +224,7 @@ python3 <skill>/scripts/providers.py mimo-calibrate <project> \
 先完整读取 [transitions.md](references/transitions.md)。动作语言来自项目内的 `state/style-definition.md`；Agnes 的双关键帧契约保持不变，但任务拆分不同：
 
 - `hard-cut`：不生成转场任务；静态项目不调用视频模型，有内部运动时只生成各场景内容任务。
-- `transition-separated`：默认；生成 N 个内容任务和 N-1 个独立转场任务。内容任务不得进入下一场景，转场任务只连接前景尾帧与后景首帧。独立转场成片默认压缩到 1.0 秒。
+- `transition-separated`：可选的高质量动画转场；生成 N 个内容任务和 N-1 个独立转场任务。内容任务不得进入下一场景，转场任务只连接前景尾帧与后景首帧。独立转场成片默认压缩到 1.0 秒。
 - `transition-fused`：通常用 N 张状态图生成 N-1 个融合任务；每个提示词明确“内容动作”和“进入下一状态”两个节拍，并记录转场区间。
 
 ```bash
@@ -318,7 +319,7 @@ python3 <skill>/scripts/project.py validate <project> composition
 - `full-auto`：五个 review 均为 `automation_review.status=completed`，sample review 可省略
 - `request.json`、`style_bible` 和风格快照的 ID、版本与哈希一致
 - 所有运动镜头均记录 `mode=keyframes` 和两张输入帧
-- `request.json`、`script.json` 与 `state/motion-plan.json` 的转场模式一致；未指定时为 `transition-separated`，默认成片转场为 1.0 秒
+- `request.json`、`script.json` 与 `state/motion-plan.json` 的转场模式一致；未指定时为 `hard-cut` 且转场时长为 0，明确选择独立转场时成片默认 1.0 秒
 - 过渡动画的台词交接位于转场中点，整条口播没有转场静音
 - 最终 MP4 为 1280×720、24fps、H.264 + AAC 且可完整解码
 - 总时长与清理后 WAV 累计时长仅有编码级误差

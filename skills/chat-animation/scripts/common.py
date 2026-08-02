@@ -22,16 +22,26 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 
-AGNES_TOKEN_NAMES = (
+AGNES_LEGACY_TOKEN_NAMES = (
     "AGNES_API_KEY",
     "AGNES_API_TOKEN",
     "APIHUB_AGNES_API_KEY",
 )
+AGNES_GLOBAL_TOKEN_NAMES = ("AGNES_GLOBAL_API_KEY",) + AGNES_LEGACY_TOKEN_NAMES
+AGNES_CN_TOKEN_NAMES = ("AGNES_CN_API_KEY",)
+AGNES_TOKEN_NAMES = AGNES_GLOBAL_TOKEN_NAMES
+AGNES_REGIONS = ("global", "cn")
+AGNES_BASE_URLS = {
+    "global": "https://apihub.agnes-ai.com",
+    "cn": "https://api.agnes-ai.cn",
+}
 MIMO_TOKEN_NAMES = ("MIMO_API_KEY",)
 STAGES = ("director", "visual", "motion", "audio", "composition")
 STAGE_NUMBERS = {stage: index + 1 for index, stage in enumerate(STAGES)}
 SAMPLE_STAGES = ("visual", "motion", "audio")
 KEYCHAIN_SERVICES = {
+    "AGNES_GLOBAL_API_KEY": "chat-animation/AGNES_GLOBAL_API_KEY",
+    "AGNES_CN_API_KEY": "chat-animation/AGNES_CN_API_KEY",
     "AGNES_API_KEY": "chat-animation/AGNES_API_KEY",
     "AGNES_API_TOKEN": "chat-animation/AGNES_API_KEY",
     "APIHUB_AGNES_API_KEY": "chat-animation/AGNES_API_KEY",
@@ -118,6 +128,41 @@ def token_value(names: Sequence[str]) -> Tuple[Optional[str], Optional[str]]:
         if completed.returncode == 0 and value:
             return name, value
     return None, None
+
+
+def agnes_region(value: Optional[str] = None) -> str:
+    selected = str(value or os.environ.get("CHAT_ANIMATION_AGNES_REGION") or "").strip().lower()
+    if not selected:
+        cn_name, _ = token_value(AGNES_CN_TOKEN_NAMES)
+        global_name, _ = token_value(AGNES_GLOBAL_TOKEN_NAMES)
+        if cn_name and global_name:
+            raise SkillError(
+                "Both Agnes Global and CN credentials are configured. Select one via "
+                "--agnes-region or CHAT_ANIMATION_AGNES_REGION."
+            )
+        selected = "cn" if cn_name else "global"
+    if selected not in AGNES_REGIONS:
+        raise SkillError(
+            "Agnes region must be 'global' or 'cn' via --agnes-region or "
+            "CHAT_ANIMATION_AGNES_REGION."
+        )
+    return selected
+
+
+def agnes_token_names(region: str) -> Sequence[str]:
+    if region == "cn":
+        return AGNES_CN_TOKEN_NAMES
+    if region == "global":
+        return AGNES_GLOBAL_TOKEN_NAMES
+    raise SkillError(f"Unsupported Agnes region: {region}")
+
+
+def agnes_base_url(region: str) -> str:
+    override = os.environ.get("CHAT_ANIMATION_AGNES_BASE_URL")
+    if not override:
+        suffix = "CN" if region == "cn" else "GLOBAL"
+        override = os.environ.get(f"CHAT_ANIMATION_AGNES_{suffix}_BASE_URL")
+    return str(override or AGNES_BASE_URLS[region]).rstrip("/")
 
 
 def require_token(names: Sequence[str], provider: str) -> str:

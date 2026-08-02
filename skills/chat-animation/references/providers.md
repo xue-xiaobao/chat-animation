@@ -15,13 +15,21 @@
 
 ### Agnes
 
-1. 打开 <https://agnes-ai.com> 并注册。
-2. 在 Console → API Keys 创建 key。
-3. 只在本机 shell 或密钥管理器中配置：
+国际站与 CN 站账号、API Key 和请求域名彼此独立。选择其中一套：
 
 ```bash
-export AGNES_API_KEY="<your-key>"
+# 国际站
+export CHAT_ANIMATION_AGNES_REGION="global"
+export AGNES_GLOBAL_API_KEY="<global-key>"
+
+# 或 CN 站
+export CHAT_ANIMATION_AGNES_REGION="cn"
+export AGNES_CN_API_KEY="<cn-key>"
 ```
+
+国际站在 <https://platform.agnes-ai.com> 创建 Key；CN 站在 <https://platform.agnes-ai.cn> 创建 Key。旧的 `AGNES_API_KEY`、`AGNES_API_TOKEN`、`APIHUB_AGNES_API_KEY` 继续作为国际站兼容别名。
+
+初始化可用 `--agnes-region global|cn` 显式选择。未显式选择时：只有 CN Key 可用则自动使用 `cn`，只有国际站 Key 或没有 Key 时使用 `global`；两套 Key 同时存在会停止并要求明确选择。项目一旦初始化，`request.json.agnes` 会固化区域和 Base URL，后续图片、视频、轮询和恢复都读取该项目配置。
 
 ### Xiaomi MiMo
 
@@ -40,20 +48,24 @@ export MIMO_API_KEY="<your-key>"
 本 Skill 在环境变量缺失时，会只读查询当前用户的 macOS Keychain：
 
 ```text
-service: chat-animation/AGNES_API_KEY
+service: chat-animation/AGNES_GLOBAL_API_KEY
+service: chat-animation/AGNES_CN_API_KEY
 service: chat-animation/MIMO_API_KEY
 account: 当前 macOS 用户
 ```
 
-可用 `security add-generic-password -U` 写入这两个 service。脚本只把 key 保存在进程内存中，不输出到日志。设置 `CHAT_ANIMATION_DISABLE_KEYCHAIN=1` 可禁用此兜底，便于隔离测试。其他系统继续使用环境变量或系统密钥管理器。
+可用 `security add-generic-password -U` 写入对应 service。脚本只把 key 保存在进程内存中，不输出到日志。设置 `CHAT_ANIMATION_DISABLE_KEYCHAIN=1` 可禁用此兜底，便于隔离测试。其他系统继续使用环境变量或系统密钥管理器。
 
 ## 2. Agnes
 
-基础地址：
+区域与基础地址：
 
 ```text
-https://apihub.agnes-ai.com
+global → https://apihub.agnes-ai.com
+cn     → https://api.agnes-ai.cn
 ```
+
+全局兼容覆盖使用 `CHAT_ANIMATION_AGNES_BASE_URL`；分区覆盖使用 `CHAT_ANIMATION_AGNES_GLOBAL_BASE_URL` 或 `CHAT_ANIMATION_AGNES_CN_BASE_URL`。代码自行拼接 `/v1`，覆盖值不要带 `/v1`。
 
 视频：
 
@@ -181,6 +193,7 @@ FFmpeg/FFprobe 是最终媒体处理的系统依赖，不是 Python 包。若系
 ## 6. 安全与恢复
 
 - 请求记录永不包含 Authorization header。
+- provider 记录必须保存 Agnes `region` 与 `base_url`；已有任务与项目配置不一致时停止恢复，禁止跨站查询。
 - 视频提交前先写 `submission_intent`；成功后记录 ID。
 - 如果提交过程中断且无法判断服务端是否已创建任务，标记 `submission_uncertain`，不要自动重复提交。
 - `queued`、`in_progress` 不是失败。

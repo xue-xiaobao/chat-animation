@@ -15,10 +15,12 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from common import (
-    AGNES_TOKEN_NAMES,
     MIMO_TOKEN_NAMES,
     STAGES,
     SkillError,
+    agnes_base_url,
+    agnes_region,
+    agnes_token_names,
     command_path,
     decode_check,
     file_record,
@@ -59,7 +61,7 @@ TRANSITION_MODES = (
     "transition-separated",
     "transition-fused",
 )
-DEFAULT_TRANSITION_MODE = "transition-separated"
+DEFAULT_TRANSITION_MODE = "hard-cut"
 DEFAULT_TRANSITION_DURATION_SECONDS = 1.0
 FRAME_POLICIES = (
     "distinct-first-end",
@@ -195,8 +197,9 @@ def materialize_style_snapshot(
     return selection
 
 
-def preflight_report() -> Dict[str, Any]:
-    agnes_name, _ = token_value(AGNES_TOKEN_NAMES)
+def preflight_report(requested_agnes_region: Optional[str] = None) -> Dict[str, Any]:
+    selected_agnes_region = agnes_region(requested_agnes_region)
+    agnes_name, _ = token_value(agnes_token_names(selected_agnes_region))
     mimo_name, _ = token_value(MIMO_TOKEN_NAMES)
     python_ok = sys.version_info >= (3, 9)
     ffmpeg = command_path("ffmpeg")
@@ -251,7 +254,12 @@ def preflight_report() -> Dict[str, Any]:
         "checked_at": iso_now(),
         "ready": not blockers,
         "tokens": {
-            "agnes": {"configured": bool(agnes_name), "environment_variable": agnes_name},
+            "agnes": {
+                "configured": bool(agnes_name),
+                "environment_variable": agnes_name,
+                "region": selected_agnes_region,
+                "base_url": agnes_base_url(selected_agnes_region),
+            },
             "mimo": {"configured": bool(mimo_name), "environment_variable": mimo_name},
         },
         "runtime": {
@@ -279,7 +287,7 @@ def preflight_report() -> Dict[str, Any]:
 
 
 def cmd_preflight(args: argparse.Namespace) -> None:
-    report = preflight_report()
+    report = preflight_report(args.agnes_region)
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
@@ -288,6 +296,8 @@ def cmd_preflight(args: argparse.Namespace) -> None:
             "  Agnes token: "
             + ("configured" if report["tokens"]["agnes"]["configured"] else "missing")
         )
+        print(f"  Agnes region: {report['tokens']['agnes']['region']}")
+        print(f"  Agnes base URL: {report['tokens']['agnes']['base_url']}")
         print(
             "  MiMo token: "
             + ("configured" if report["tokens"]["mimo"]["configured"] else "missing")
@@ -310,9 +320,14 @@ def cmd_preflight(args: argparse.Namespace) -> None:
         )
         if not report["tokens"]["agnes"]["configured"]:
             print("\nAgnes setup:")
-            print("  1. Open https://agnes-ai.com")
+            if report["tokens"]["agnes"]["region"] == "cn":
+                print("  1. Open https://platform.agnes-ai.cn")
+                key_name = "AGNES_CN_API_KEY"
+            else:
+                print("  1. Open https://platform.agnes-ai.com")
+                key_name = "AGNES_GLOBAL_API_KEY"
             print("  2. Console -> API Keys -> Create")
-            print('  3. export AGNES_API_KEY="<your-key>"')
+            print(f'  3. export {key_name}="<your-key>"')
         if not report["tokens"]["mimo"]["configured"]:
             print("\nXiaomi MiMo setup:")
             print("  1. Open https://platform.xiaomimimo.com")
@@ -339,7 +354,7 @@ def next_project_path(root: Path, name: str) -> Tuple[Path, str]:
 
 
 def cmd_init(args: argparse.Namespace) -> None:
-    report = preflight_report()
+    report = preflight_report(args.agnes_region)
     if not report["ready"] and not args.allow_missing_tokens:
         raise SkillError(
             "Preflight is blocked. Run project.py preflight and configure all required tokens."
@@ -364,6 +379,7 @@ def cmd_init(args: argparse.Namespace) -> None:
         (project / folder).mkdir()
     style_selection = materialize_style_snapshot(project, str(style["id"]))
     font_selection = initialize_project_font(project)
+    selected_agnes_region = str(report["tokens"]["agnes"]["region"])
     request = {
         "schema_version": "1.0",
         "project_name": slugify(args.name),
@@ -378,6 +394,10 @@ def cmd_init(args: argparse.Namespace) -> None:
         "language": args.language,
         "approval_mode": "full-auto" if args.full_auto else "human-gated",
         "approval_note": str(args.approval_note or "").strip(),
+        "agnes": {
+            "region": selected_agnes_region,
+            "base_url": agnes_base_url(selected_agnes_region),
+        },
         "transition": {
             "mode": args.transition_mode,
             "duration_seconds": transition_duration,
@@ -573,7 +593,11 @@ def validate_director(project: Path) -> Tuple[List[Dict[str, Any]], List[Path]]:
     if request_transition is None:
         request_transition = {
             "mode": DEFAULT_TRANSITION_MODE,
-            "duration_seconds": DEFAULT_TRANSITION_DURATION_SECONDS,
+            "duration_seconds": (
+                0.0
+                if DEFAULT_TRANSITION_MODE == "hard-cut"
+                else DEFAULT_TRANSITION_DURATION_SECONDS
+            ),
         }
     if not isinstance(request_transition, dict):
         transition_issues.append("request.transition must be an object")
@@ -1528,6 +1552,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     preflight = sub.add_parser("preflight", help="Check tokens and media runtime.")
     preflight.add_argument("--json", action="store_true")
+    preflight.add_argument("--agnes-region", choices=("global", "cn"))
     preflight.set_defaults(func=cmd_preflight)
 
     init = sub.add_parser("init", help="Create a versioned project.")
@@ -1547,10 +1572,15 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--height", type=int, default=720)
     init.add_argument("--fps", type=int, default=24)
     init.add_argument(
+        "--agnes-region",
+        choices=("global", "cn"),
+        help="Bind this project to the global or CN Agnes API profile.",
+    )
+    init.add_argument(
         "--transition-mode",
         choices=TRANSITION_MODES,
         default=DEFAULT_TRANSITION_MODE,
-        help="Editing strategy; defaults to a dedicated transition animation.",
+        help="Editing strategy; defaults to a hard cut.",
     )
     init.add_argument(
         "--transition-duration",
