@@ -22,21 +22,28 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 
-AGNES_TOKEN_NAMES = (
+AGNES_LEGACY_TOKEN_NAMES = (
     "AGNES_API_KEY",
     "AGNES_API_TOKEN",
     "APIHUB_AGNES_API_KEY",
 )
+AGNES_GLOBAL_TOKEN_NAMES = ("AGNES_GLOBAL_API_KEY",) + AGNES_LEGACY_TOKEN_NAMES
+AGNES_CN_TOKEN_NAMES = ("AGNES_CN_API_KEY",)
+AGNES_TOKEN_NAMES = AGNES_GLOBAL_TOKEN_NAMES
+AGNES_REGIONS = ("global", "cn")
+AGNES_BASE_URLS = {
+    "global": "https://apihub.agnes-ai.com",
+    "cn": "https://api.agnes-ai.cn",
+}
 MIMO_TOKEN_NAMES = ("MIMO_API_KEY",)
 STAGES = ("director", "visual", "motion", "audio", "composition")
 STAGE_NUMBERS = {stage: index + 1 for index, stage in enumerate(STAGES)}
 SAMPLE_STAGES = ("visual", "motion", "audio")
-KEYCHAIN_SERVICES = {
-    "AGNES_API_KEY": "chat-animation/AGNES_API_KEY",
-    "AGNES_API_TOKEN": "chat-animation/AGNES_API_KEY",
-    "APIHUB_AGNES_API_KEY": "chat-animation/AGNES_API_KEY",
-    "MIMO_API_KEY": "chat-animation/MIMO_API_KEY",
-}
+CREDENTIAL_KEYS = (
+    "AGNES_GLOBAL_API_KEY",
+    "AGNES_CN_API_KEY",
+    "MIMO_API_KEY",
+)
 
 
 class SkillError(RuntimeError):
@@ -84,40 +91,136 @@ def write_json(path: Path, value: Any) -> None:
     os.replace(temp_name, path)
 
 
+def credentials_file_path() -> Path:
+    override = os.environ.get("CHAT_ANIMATION_CREDENTIALS_FILE")
+    if override:
+        return Path(override).expanduser().resolve()
+    return Path.home() / ".chat-animation" / "credentials.env"
+
+
+def read_local_credentials() -> Dict[str, str]:
+    path = credentials_file_path()
+    if not path.is_file():
+        return {}
+    values: Dict[str, str] = {}
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise SkillError(f"Could not read credentials file: {path}") from exc
+    for number, raw in enumerate(lines, start=1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            raise SkillError(f"Invalid credentials line {number} in {path}")
+        name, value = line.split("=", 1)
+        name = name.strip()
+        value = value.strip()
+        if name not in CREDENTIAL_KEYS:
+            raise SkillError(f"Unsupported credential name {name!r} in {path}")
+        if not value or "\x00" in value:
+            raise SkillError(f"Invalid empty credential {name} in {path}")
+        values[name] = value
+    return values
+
+
+def write_local_credentials(updates: Dict[str, str]) -> Path:
+    invalid = sorted(set(updates) - set(CREDENTIAL_KEYS))
+    if invalid:
+        raise SkillError(f"Unsupported credential names: {', '.join(invalid)}")
+    values = read_local_credentials()
+    for name, value in updates.items():
+        cleaned = str(value).strip()
+        if not cleaned or any(character in cleaned for character in ("\n", "\r", "\x00")):
+            raise SkillError(f"Credential {name} is empty or contains an invalid character")
+        values[name] = cleaned
+    path = credentials_file_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = "".join(f"{name}={values[name]}\n" for name in CREDENTIAL_KEYS if name in values)
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        dir=str(path.parent),
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as handle:
+        handle.write(payload)
+        temp_name = handle.name
+    temp_path = Path(temp_name)
+    if os.name != "nt":
+        os.chmod(temp_path, 0o600)
+    os.replace(temp_path, path)
+    if os.name == "nt":
+        icacls = shutil.which("icacls")
+        account = os.environ.get("USERNAME") or getpass.getuser()
+        if not icacls:
+            raise SkillError("Windows credential protection requires icacls")
+        completed = subprocess.run(
+            [icacls, str(path), "/inheritance:r", "/grant:r", f"{account}:(F)"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if completed.returncode != 0:
+            raise SkillError(f"Could not restrict Windows credentials file ACL: {path}")
+    else:
+        os.chmod(path, 0o600)
+    return path
+
+
 def token_value(names: Sequence[str]) -> Tuple[Optional[str], Optional[str]]:
     for name in names:
         value = os.environ.get(name)
         if value:
             return name, value
-    if os.environ.get("CHAT_ANIMATION_DISABLE_KEYCHAIN") == "1":
-        return None, None
-    security = shutil.which("security")
-    if not security:
-        return None, None
-    account = os.environ.get("USER") or getpass.getuser()
+    credentials = read_local_credentials()
     for name in names:
-        service = KEYCHAIN_SERVICES.get(name)
-        if not service:
-            continue
-        completed = subprocess.run(
-            [
-                security,
-                "find-generic-password",
-                "-a",
-                account,
-                "-s",
-                service,
-                "-w",
-            ],
-            check=False,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-        )
-        value = (completed.stdout or "").strip()
-        if completed.returncode == 0 and value:
+        value = credentials.get(name)
+        if value:
             return name, value
     return None, None
+
+
+def token_source(name: Optional[str]) -> Optional[str]:
+    if not name:
+        return None
+    return "environment" if os.environ.get(name) else "credentials-file"
+
+
+def agnes_region(value: Optional[str] = None) -> str:
+    selected = str(value or os.environ.get("CHAT_ANIMATION_AGNES_REGION") or "").strip().lower()
+    if not selected:
+        cn_name, _ = token_value(AGNES_CN_TOKEN_NAMES)
+        global_name, _ = token_value(AGNES_GLOBAL_TOKEN_NAMES)
+        if cn_name and global_name:
+            raise SkillError(
+                "Both Agnes Global and CN credentials are configured. Select one via "
+                "--agnes-region or CHAT_ANIMATION_AGNES_REGION."
+            )
+        selected = "cn" if cn_name else "global"
+    if selected not in AGNES_REGIONS:
+        raise SkillError(
+            "Agnes region must be 'global' or 'cn' via --agnes-region or "
+            "CHAT_ANIMATION_AGNES_REGION."
+        )
+    return selected
+
+
+def agnes_token_names(region: str) -> Sequence[str]:
+    if region == "cn":
+        return AGNES_CN_TOKEN_NAMES
+    if region == "global":
+        return AGNES_GLOBAL_TOKEN_NAMES
+    raise SkillError(f"Unsupported Agnes region: {region}")
+
+
+def agnes_base_url(region: str) -> str:
+    override = os.environ.get("CHAT_ANIMATION_AGNES_BASE_URL")
+    if not override:
+        suffix = "CN" if region == "cn" else "GLOBAL"
+        override = os.environ.get(f"CHAT_ANIMATION_AGNES_{suffix}_BASE_URL")
+    return str(override or AGNES_BASE_URLS[region]).rstrip("/")
 
 
 def require_token(names: Sequence[str], provider: str) -> str:

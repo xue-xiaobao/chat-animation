@@ -494,10 +494,18 @@ def main() -> None:
                 "AGNES_API_KEY",
                 "AGNES_API_TOKEN",
                 "APIHUB_AGNES_API_KEY",
+                "AGNES_GLOBAL_API_KEY",
+                "AGNES_CN_API_KEY",
                 "MIMO_API_KEY",
+                "CHAT_ANIMATION_AGNES_REGION",
+                "CHAT_ANIMATION_AGNES_BASE_URL",
+                "CHAT_ANIMATION_AGNES_GLOBAL_BASE_URL",
+                "CHAT_ANIMATION_AGNES_CN_BASE_URL",
+                "CHAT_ANIMATION_CREDENTIALS_FILE",
             ):
                 clean_env.pop(name, None)
-            clean_env["CHAT_ANIMATION_DISABLE_KEYCHAIN"] = "1"
+            credentials_file = root / "user-home" / ".chat-animation" / "credentials.env"
+            clean_env["CHAT_ANIMATION_CREDENTIALS_FILE"] = str(credentials_file)
             blocked = run_cli(
                 [sys.executable, str(PROJECT_CLI), "preflight"],
                 env=clean_env,
@@ -505,12 +513,78 @@ def main() -> None:
             )
             assert "BLOCKED" in blocked.stdout
 
+            configure_env = dict(clean_env)
+            configure_env.update(
+                {
+                    "AGNES_CN_API_KEY": "mock-cn-agnes-token",
+                    "MIMO_API_KEY": "mock-mimo-token",
+                }
+            )
+            configured = run_cli(
+                [
+                    sys.executable,
+                    str(PROJECT_CLI),
+                    "configure-credentials",
+                    "--from-env",
+                ],
+                env=configure_env,
+            )
+            configured_report = json.loads(configured.stdout)
+            assert configured_report["stored"] == ["AGNES_CN_API_KEY", "MIMO_API_KEY"]
+            assert credentials_file.is_file()
+            if os.name != "nt":
+                assert credentials_file.stat().st_mode & 0o777 == 0o600
+
+            cn_env = dict(clean_env)
+            cn_env["CHAT_ANIMATION_AGNES_REGION"] = "cn"
+            cn_ready = run_cli(
+                [sys.executable, str(PROJECT_CLI), "preflight", "--json"],
+                env=cn_env,
+            )
+            cn_report = json.loads(cn_ready.stdout)
+            assert cn_report["tokens"]["agnes"] == {
+                "configured": True,
+                "environment_variable": "AGNES_CN_API_KEY",
+                "region": "cn",
+                "base_url": "https://api.agnes-ai.cn",
+                "source": "credentials-file",
+            }
+            cn_env["CHAT_ANIMATION_DISABLE_FONT_DOWNLOAD"] = "1"
+            cn_created = run_cli(
+                [
+                    sys.executable,
+                    str(PROJECT_CLI),
+                    "init",
+                    "--projects-root",
+                    str(root / "cn-projects"),
+                    "--name",
+                    "cn-region-test",
+                    "--idea",
+                    "测试 Agnes CN 项目绑定",
+                ],
+                env=cn_env,
+            )
+            cn_request = load_json(Path(cn_created.stdout.strip()) / "request.json")
+            assert cn_request["agnes"] == {
+                "region": "cn",
+                "base_url": "https://api.agnes-ai.cn",
+            }
+            ambiguous_env = dict(cn_env)
+            ambiguous_env.pop("CHAT_ANIMATION_AGNES_REGION", None)
+            ambiguous_env["AGNES_GLOBAL_API_KEY"] = "mock-global-agnes-token"
+            ambiguous = run_cli(
+                [sys.executable, str(PROJECT_CLI), "preflight", "--json"],
+                env=ambiguous_env,
+                expect=2,
+            )
+            assert "Both Agnes Global and CN credentials are configured" in ambiguous.stderr
+
             env = dict(clean_env)
             env.update(
                 {
                     "AGNES_API_KEY": "mock-agnes-token",
                     "MIMO_API_KEY": "mock-mimo-token",
-                    "CHAT_ANIMATION_DISABLE_KEYCHAIN": "1",
+                    "CHAT_ANIMATION_AGNES_REGION": "global",
                     "CHAT_ANIMATION_AGNES_BASE_URL": state.base_url,
                     "CHAT_ANIMATION_MIMO_BASE_URL": state.base_url,
                     "CHAT_ANIMATION_DISABLE_FONT_DOWNLOAD": "1",
@@ -575,8 +649,8 @@ def main() -> None:
             assert font_selection["source"].startswith("system-fallback")
             assert request["caption_font"]["family"] == font_selection["family"]
             assert request["transition"] == {
-                "mode": "transition-separated",
-                "duration_seconds": 1.0,
+                "mode": "hard-cut",
+                "duration_seconds": 0.0,
             }
             run_cli(
                 [
@@ -1048,6 +1122,13 @@ def main() -> None:
             assert state.image_requests[0]["prompt"] != state.image_requests[1]["prompt"]
             generated_visual = load_json(project / "visual" / "visual-manifest.json")
             generated_entry = generated_visual["scenes"][0]
+            generated_provider = load_json(
+                project / generated_entry["provider_record"]
+            )
+            assert generated_provider["agnes"] == {
+                "region": "global",
+                "base_url": state.base_url,
+            }
             assert "first_frame_reused_from" not in generated_entry
             assert generated_entry["first_frame_prompt_sha256"]
             assert generated_entry["end_frame_prompt_sha256"]
@@ -1068,6 +1149,8 @@ def main() -> None:
                     "测试共享主画面风格",
                     "--style",
                     "storybook",
+                    "--transition-mode",
+                    "transition-separated",
                 ],
                 env=env,
             )
@@ -1192,6 +1275,8 @@ def main() -> None:
                     "--full-auto",
                     "--approval-note",
                     "请全自动完成，跳过所有审批",
+                    "--transition-mode",
+                    "transition-separated",
                 ],
                 env=env,
             )
@@ -1367,6 +1452,8 @@ def main() -> None:
                     "--full-auto",
                     "--approval-note",
                     "请全自动完成，跳过所有审批",
+                    "--transition-mode",
+                    "transition-separated",
                 ],
                 env=env,
             )
@@ -1480,6 +1567,8 @@ def main() -> None:
                     "--full-auto",
                     "--approval-note",
                     "请全自动完成，跳过所有审批",
+                    "--transition-mode",
+                    "transition-separated",
                 ],
                 env=env,
             )
@@ -1747,7 +1836,10 @@ def main() -> None:
                     "upstream_change_invalidates_downstream": True,
                     "self_contained_runtime": True,
                     "explicit_full_auto_mode": True,
-                    "default_separated_transition_mode": True,
+                    "default_hard_cut_transition_mode": True,
+                    "agnes_cn_preflight_profile": True,
+                    "agnes_region_persisted_in_project_and_provider": True,
+                    "cross_platform_one_time_credentials_file": True,
                     "separated_transition_runtime": True,
                     "narration_aware_motion_duration": True,
                     "default_voice_timing_needs_no_calibration": True,

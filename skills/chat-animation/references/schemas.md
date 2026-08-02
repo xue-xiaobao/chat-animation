@@ -43,9 +43,13 @@
   "language": "zh-CN",
   "approval_mode": "human-gated",
   "approval_note": "",
+  "agnes": {
+    "region": "global",
+    "base_url": "https://apihub.agnes-ai.com"
+  },
   "transition": {
-    "mode": "transition-separated",
-    "duration_seconds": 1.0
+    "mode": "hard-cut",
+    "duration_seconds": 0.0
   },
   "frame": {
     "aspect_ratio": "16:9",
@@ -64,7 +68,9 @@
 
 用户明确要求全自动时，`approval_mode` 为 `full-auto`，`approval_note` 保存其授权原话。不能从模糊表达推断该模式。
 
-`transition.mode` 只允许：`hard-cut`、`transition-separated`、`transition-fused`。默认是 `transition-separated`。`hard-cut` 的 `duration_seconds` 固定为 `0`；两种动画转场默认 `1.0`，用户可明确修改。
+`agnes.region` 只允许 `global` 或 `cn`，分别绑定国际站与 CN 站独立 API Key。`base_url` 在初始化时固化；provider 记录重复保存两者，恢复任务时必须与项目一致。旧项目没有 `agnes` 时按当前环境兼容推断。
+
+`transition.mode` 只允许：`hard-cut`、`transition-separated`、`transition-fused`。默认是 `hard-cut`。`hard-cut` 的 `duration_seconds` 固定为 `0`；用户明确选择两种动画转场时，时长默认 `1.0`，也可明确修改。
 
 ## 1.1 font-selection.json
 
@@ -98,8 +104,8 @@
     "one_sentence_takeaway": "观众看完能复述的一句话",
     "narrative_arc": ["钩子", "冲突", "机制", "方法", "记忆句"],
     "transition": {
-      "mode": "transition-separated",
-      "duration_seconds": 1.0
+      "mode": "hard-cut",
+      "duration_seconds": 0.0
     }
   },
   "research": {
@@ -246,6 +252,8 @@
 ```
 
 manifest 只登记 motion plan 实际需要的状态帧。所有状态帧必须有内容；同一个跨场边界状态允许按 motion plan 复用同一文件，禁止为相同像素重复调用图片模型。`shared-hero-frame` 场景的 `first_frame` 与 `end_frame` 应为同一相对路径；供应商记录必须说明图片只生成一次并被两个关键帧槽位复用。
+
+Agnes 图片与视频的 `provider.json` 必须保存 `agnes.region` 与 `agnes.base_url`。恢复既有任务时，这两个值必须与项目配置一致。
 
 ## 5. motion-manifest.json
 

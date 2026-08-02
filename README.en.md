@@ -19,10 +19,6 @@
 
 Turn one idea, article, question, or reference into a complete narrated explainer animation—not merely a set of prompts.
 
-![Paradox of Thrift contact sheet](assets/paradox-of-thrift-contact-sheet.jpg)
-
-https://github.com/user-attachments/assets/b02f0520-e2f9-4368-8504-84276eff1d2f
-
 ## Install in 30 seconds
 
 The recommended route uses the open `skills` CLI. It discovers this repository's standard `skills/<name>/SKILL.md` layout and lets you choose the target agent:
@@ -75,6 +71,22 @@ Chat Animation follows the standard `SKILL.md` directory layout. Its core workfl
 
 Two production-tested 16:9 styles are built in. They are not mere image filters: each style changes the visual-metaphor rules, keyframe count, motion strategy, and QA criteria.
 
+### Vox style (`vox`, default)
+
+Bold flat color fields, black-and-white halftone cut-outs, selective colored cardstock, cream keylines, and editorial-poster composition. Each scene uses distinct but compositionally anchored first and last frames; paper groups assemble in causal order, then settle into one very slow breathing pulse. Best suited to financial mechanisms, cognitive biases, abstract concepts, and argument-led explainers.
+
+![Vox style: Paradox of Thrift contact sheet](assets/paradox-of-thrift-contact-sheet.jpg)
+
+https://github.com/user-attachments/assets/b02f0520-e2f9-4368-8504-84276eff1d2f
+
+### Storybook style (`storybook`)
+
+Warm layered cut-paper dioramas, sticker-like characters, soft shadows, and concrete everyday scenes. Each scene generates one authoritative hero frame and reuses it as both keyframes; foreground pieces enter gently, then remain in place with subtle breathing. Best suited to children's education, fables, psychology, social concepts, and friendlier everyday explanations.
+
+https://github.com/user-attachments/assets/a1b5eac0-2cf2-47fe-8200-8a9a61cd5c97
+
+### Strategy comparison
+
 | Style | Visual language | Keyframe and motion strategy | Best suited to |
 | --- | --- | --- | --- |
 | **Vox style** (`vox`, default) | Bold flat color fields, black-and-white halftone cut-outs, selective colored cardstock, cream keylines, and editorial-poster composition | Generates distinct but compositionally anchored first and last frames; paper groups assemble in causal order, then settle into one very slow breathing pulse | Financial mechanisms, cognitive biases, abstract concepts, and argument-led explainers |
@@ -98,7 +110,7 @@ Core operating principles:
 
 1. **Direct before generating:** make the argument and narration clear before spending image, video, or voice credits.
 2. **Keyframes constrain motion:** animate from approved visual states instead of asking text-to-video to guess the composition.
-3. **Plan transitions early:** choose hard cuts, dedicated transitions, or fused transitions; one-second dedicated transitions are the default.
+3. **Plan transitions early:** choose hard cuts, dedicated transitions, or fused transitions; hard cuts are the default, and explicitly selected dedicated transitions default to one second.
 4. **Narration is the master clock:** preserve natural speech and retime silent visuals instead of accelerating the voice.
 5. **Keep humans in the loop:** the agent self-checks every layer and waits for approval by default; explicit full-auto mode is also available.
 6. **Resume and revise locally:** preserve prompts, task IDs, hashes, approvals, and intermediate media so interrupted jobs can resume and one scene can be replaced independently.
@@ -123,7 +135,7 @@ The workflow plans the argument, writes narration and storyboards, generates ima
 - **Review before spending:** creates one visual, motion, and voice sample before costly batches.
 - **Audio-master timing:** keeps narration natural and retimes silent video to match it.
 - **Controllable motion:** Agnes receives a first frame, an end frame, and an English motion prompt.
-- **Three edit modes:** hard cuts, dedicated transitions, or fused transitions; dedicated one-second transitions are the default.
+- **Three edit modes:** hard cuts, dedicated transitions, or fused transitions; hard cuts are the default and animated transitions are opt-in.
 - **Local, resumable projects:** saves manifests, provider task IDs, hashes, reviews, and downloaded outputs.
 - **Targeted revisions:** redo one scene, transition, voice, or caption layer without rebuilding everything.
 - **Built-in Vox style:** paper collage, stickers, halftones, readable metaphors, and restrained breathing motion.
@@ -135,7 +147,7 @@ The workflow plans the argument, writes narration and storyboards, generates ima
 - Codex or another agent capable of loading and following `SKILL.md`
 - Python 3.9+
 - FFmpeg and FFprobe
-- An Agnes API key for image and video generation
+- An Agnes Global or CN API key for image and video generation; keys are not interchangeable across regions
 - A Xiaomi MiMo API key for narration
 
 Agnes and MiMo are external services and may charge for usage. Never commit API keys, generated voice references, or private project outputs.
@@ -158,12 +170,14 @@ New-Item -ItemType Directory -Force "$env:USERPROFILE\.codex\skills" | Out-Null
 Copy-Item -Recurse -Force "skills\chat-animation" "$env:USERPROFILE\.codex\skills\chat-animation"
 ```
 
-Configure credentials in your environment or operating-system secret store:
+Configure credentials once through hidden terminal prompts:
 
 ```bash
-export AGNES_API_KEY="<your-key>"
-export MIMO_API_KEY="<your-key>"
+python3 skills/chat-animation/scripts/project.py configure-credentials \
+  --set agnes-cn --set mimo
 ```
+
+Use `--set agnes-global` for Global or `--set agnes-cn` for CN. Credentials are stored at `~/.chat-animation/credentials.env`, or `%USERPROFILE%\.chat-animation\credentials.env` on Windows. The file is protected with mode `0600` on macOS/Linux and a current-user ACL on Windows, then loaded automatically on future runs.
 
 Run the preflight before the first project:
 

@@ -20,10 +20,12 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from common import (
-    AGNES_TOKEN_NAMES,
     MIMO_TOKEN_NAMES,
     ProviderError,
     SkillError,
+    agnes_base_url,
+    agnes_region,
+    agnes_token_names,
     command_path,
     download,
     enforce_sample_generation_gate,
@@ -51,9 +53,6 @@ from common import (
 )
 
 
-AGNES_BASE_URL = os.environ.get(
-    "CHAT_ANIMATION_AGNES_BASE_URL", "https://apihub.agnes-ai.com"
-).rstrip("/")
 MIMO_BASE_URL = os.environ.get(
     "CHAT_ANIMATION_MIMO_BASE_URL", "https://api.xiaomimimo.com"
 ).rstrip("/")
@@ -75,6 +74,24 @@ FRAME_POLICIES = (
     "distinct-first-end",
     "shared-hero-frame",
 )
+
+
+def project_agnes_config(project: Path) -> Dict[str, str]:
+    request = load_json(project / "request.json")
+    saved = request.get("agnes")
+    if isinstance(saved, dict):
+        region = agnes_region(str(saved.get("region") or ""))
+        base_url = str(saved.get("base_url") or agnes_base_url(region)).rstrip("/")
+    else:
+        region = agnes_region()
+        base_url = agnes_base_url(region)
+    return {"region": region, "base_url": base_url}
+
+
+def require_project_agnes(project: Path) -> Tuple[Dict[str, str], str]:
+    config = project_agnes_config(project)
+    token = require_token(agnes_token_names(config["region"]), f"Agnes {config['region']}")
+    return config, token
 
 
 def project_frame_policy(project: Path) -> str:
@@ -337,7 +354,7 @@ def cmd_register_visual(args: argparse.Namespace) -> None:
 
 
 def request_agnes_image(
-    token: str, prompt: str, output: Path, *, timeout: int
+    token: str, base_url: str, prompt: str, output: Path, *, timeout: int
 ) -> Dict[str, Any]:
     payload = {
         "model": AGNES_IMAGE_MODEL,
@@ -347,7 +364,7 @@ def request_agnes_image(
     }
     response = http_json(
         "POST",
-        f"{AGNES_BASE_URL}/v1/images/generations",
+        f"{base_url}/v1/images/generations",
         token=token,
         payload=payload,
         timeout=timeout,
@@ -367,7 +384,7 @@ def cmd_agnes_image(args: argparse.Namespace) -> None:
     project = project_path(args.project)
     require_approved(project, "director")
     enforce_sample_generation_gate(project, "visual", [args.scene])
-    token = require_token(AGNES_TOKEN_NAMES, "Agnes")
+    agnes, token = require_project_agnes(project)
     script = load_json(project / "script.json")
     scene = find_scene(script, args.scene)
     frame_policy = project_frame_policy(project)
@@ -390,6 +407,7 @@ def cmd_agnes_image(args: argparse.Namespace) -> None:
     }
     record: Dict[str, Any] = {
         "provider": "agnes",
+        "agnes": agnes,
         "model": AGNES_IMAGE_MODEL,
         "status": "submitting",
         "created_at": iso_now(),
@@ -409,7 +427,7 @@ def cmd_agnes_image(args: argparse.Namespace) -> None:
             record["status"] = "submitting-hero"
             write_json(provider_path, record)
             hero_result = request_agnes_image(
-                token, end_prompt, first_download, timeout=args.timeout
+                token, agnes["base_url"], end_prompt, first_download, timeout=args.timeout
             )
             record["outputs"] = {
                 "hero": hero_result,
@@ -419,13 +437,13 @@ def cmd_agnes_image(args: argparse.Namespace) -> None:
             record["status"] = "submitting-first"
             write_json(provider_path, record)
             first_result = request_agnes_image(
-                token, first_prompt, first_download, timeout=args.timeout
+                token, agnes["base_url"], first_prompt, first_download, timeout=args.timeout
             )
             record["outputs"] = {"first": first_result}
             record["status"] = "submitting-end"
             write_json(provider_path, record)
             end_result = request_agnes_image(
-                token, end_prompt, end_download, timeout=args.timeout
+                token, agnes["base_url"], end_prompt, end_download, timeout=args.timeout
             )
             record["outputs"]["end"] = end_result
         record.update(
@@ -507,17 +525,19 @@ def extract_video_url(data: Dict[str, Any]) -> Optional[str]:
     return visit(data)
 
 
-def retrieve_video(token: str, kind: str, identifier: str, timeout: int) -> Dict[str, Any]:
+def retrieve_video(
+    token: str, base_url: str, kind: str, identifier: str, timeout: int
+) -> Dict[str, Any]:
     if kind == "video_id":
         query = urllib.parse.urlencode(
             {"video_id": identifier, "model_name": AGNES_VIDEO_MODEL}
         )
         return http_json(
-            "GET", f"{AGNES_BASE_URL}/agnesapi?{query}", token=token, timeout=timeout
+            "GET", f"{base_url}/agnesapi?{query}", token=token, timeout=timeout
         )
     quoted = urllib.parse.quote(identifier, safe="")
     return http_json(
-        "GET", f"{AGNES_BASE_URL}/v1/videos/{quoted}", token=token, timeout=timeout
+        "GET", f"{base_url}/v1/videos/{quoted}", token=token, timeout=timeout
     )
 
 
@@ -930,7 +950,7 @@ def generate_motion_scene(
     num_frames: Optional[int],
     retry_uncertain: bool,
 ) -> Dict[str, Any]:
-    token = require_token(AGNES_TOKEN_NAMES, "Agnes")
+    agnes, token = require_project_agnes(project)
     script = load_json(project / "script.json")
     job = select_motion_job(project, script, scene_id)
     duration_plan = motion_duration_plan(project, job, script, num_frames)
@@ -962,6 +982,12 @@ def generate_motion_scene(
     if pending_path:
         run_dir = pending_path.parent
         record = load_json(pending_path)
+        recorded_agnes = record.get("agnes")
+        if isinstance(recorded_agnes, dict) and recorded_agnes != agnes:
+            raise SkillError(
+                "Existing Agnes task belongs to a different region or API base URL; "
+                "restore it with the project configuration that created it."
+            )
         if record.get("status") == "submission_uncertain" and not retry_uncertain:
             raise SkillError(
                 f"Scene {scene_id} has an uncertain prior submission. Inspect "
@@ -1010,6 +1036,7 @@ def generate_motion_scene(
         }
         record = {
             "provider": "agnes",
+            "agnes": agnes,
             "model": AGNES_VIDEO_MODEL,
             "mode": "keyframes",
             "status": "submission_intent",
@@ -1036,7 +1063,7 @@ def generate_motion_scene(
             try:
                 remote = http_json(
                     "POST",
-                    f"{AGNES_BASE_URL}/v1/videos",
+                    f"{agnes['base_url']}/v1/videos",
                     token=token,
                     payload=payload,
                     timeout=timeout,
@@ -1120,7 +1147,9 @@ def generate_motion_scene(
             write_json(pending_path, record)
             raise SkillError(f"Timed out waiting for scene {scene_id}; rerun to resume polling")
         time.sleep(interval)
-        remote = retrieve_video(token, str(kind), str(identifier), timeout)
+        remote = retrieve_video(
+            token, agnes["base_url"], str(kind), str(identifier), timeout
+        )
         record.update(
             {
                 "status": video_status(remote),
@@ -1756,11 +1785,15 @@ def cmd_mimo_calibrate(args: argparse.Namespace) -> None:
 def cmd_auth_smoke(args: argparse.Namespace) -> None:
     output = Path(args.output).expanduser().resolve()
     output.mkdir(parents=True, exist_ok=True)
-    agnes_token = require_token(AGNES_TOKEN_NAMES, "Agnes")
+    selected_agnes_region = agnes_region(args.agnes_region)
+    selected_agnes_base_url = agnes_base_url(selected_agnes_region)
+    agnes_token = require_token(
+        agnes_token_names(selected_agnes_region), f"Agnes {selected_agnes_region}"
+    )
     mimo_token = require_token(MIMO_TOKEN_NAMES, "Xiaomi MiMo")
     agnes = http_json(
         "POST",
-        f"{AGNES_BASE_URL}/v1/chat/completions",
+        f"{selected_agnes_base_url}/v1/chat/completions",
         token=agnes_token,
         payload={
             "model": "agnes-2.0-flash",
@@ -1788,6 +1821,8 @@ def cmd_auth_smoke(args: argparse.Namespace) -> None:
         "agnes": {
             "ok": bool(agnes.get("choices")),
             "model": "agnes-2.0-flash",
+            "region": selected_agnes_region,
+            "base_url": selected_agnes_base_url,
         },
         "mimo": {
             "ok": duration > 0,
@@ -1891,6 +1926,7 @@ def build_parser() -> argparse.ArgumentParser:
         "auth-smoke", help="Make one minimal Agnes text and MiMo TTS live call."
     )
     smoke.add_argument("--output", required=True)
+    smoke.add_argument("--agnes-region", choices=("global", "cn"))
     smoke.add_argument("--voice", default="茉莉")
     smoke.add_argument("--timeout", type=int, default=180)
     smoke.set_defaults(func=cmd_auth_smoke)

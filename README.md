@@ -15,10 +15,6 @@
 
 把一个想法、问题、文章或参考资料做成带口播、动画和字幕的完整科普视频，而不只是输出脚本或提示词。
 
-![节俭悖论视频画面总览](assets/paradox-of-thrift-contact-sheet.jpg)
-
-https://github.com/user-attachments/assets/b02f0520-e2f9-4368-8504-84276eff1d2f
-
 ## 30 秒安装
 
 推荐使用开放的 `skills` CLI，它能识别本仓库的标准 `skills/<name>/SKILL.md` 结构，并让你选择安装到哪个 Agent：
@@ -71,6 +67,22 @@ Chat Animation 遵循标准 `SKILL.md` 目录结构，核心流程只依赖 Agen
 
 当前内置两种经过完整提示词、关键帧策略和动作 QA 约束的 16:9 风格。它们不是简单的画面滤镜，而是会同时改变视觉隐喻、静态帧数量和动画生成方式。
 
+### Vox 风格（`vox`，默认）
+
+强烈平坦色场、黑白半调照片剪贴、彩色卡纸点缀、奶油白描边和编辑海报式构图。每镜生成内容不同但构图一致的首尾帧；纸片按因果顺序克制组装，落位后只保留一次极慢呼吸。适合金融机制、认知偏差、抽象概念和观点解释。
+
+![Vox 风格：节俭悖论画面总览](assets/paradox-of-thrift-contact-sheet.jpg)
+
+https://github.com/user-attachments/assets/b02f0520-e2f9-4368-8504-84276eff1d2f
+
+### Storybook 风格（`storybook`）
+
+温暖彩色纸雕、绘本舞台、贴纸人物、柔和阴影和生活化场景。每镜只生成一张权威主画面并同时作为首尾帧；前景柔和入场，随后保持原位低幅呼吸。适合儿童科普、寓言、心理与社会概念，以及更亲和的生活化解释。
+
+https://github.com/user-attachments/assets/a1b5eac0-2cf2-47fe-8200-8a9a61cd5c97
+
+### 策略对比
+
 | 风格 | 视觉语言 | 关键帧与动作策略 | 更适合 |
 | --- | --- | --- | --- |
 | **Vox 风格**（`vox`，默认） | 强烈平坦色场、黑白半调照片剪贴、彩色卡纸点缀、奶油白描边和编辑海报式构图 | 每镜生成内容不同但构图一致的首尾帧；纸片按因果顺序克制组装，落位后只保留一次极慢呼吸 | 金融机制、认知偏差、抽象概念和观点解释 |
@@ -94,7 +106,7 @@ Chat Animation 不是一次性生成整条视频，而是把生产过程拆成�
 
 1. **编导先于生成：** 先把观点和台词讲清楚，再花费图片、视频和声音额度。
 2. **静态帧约束动画：** 动画使用首尾关键帧，不用纯文本视频随机猜测构图。
-3. **转场提前规划：** 支持硬切、独立转场和融合转场，默认使用一秒独立转场。
+3. **转场提前规划：** 支持硬切、独立转场和融合转场；默认硬切，明确选择独立转场时默认一秒。
 4. **口播是最终时钟：** 保持人声自然，通过画面变速匹配音频，而不是加速口播迁就视频。
 5. **人在环路中：** 默认每层由 Agent 自检、用户确认；用户明确要求时也可以全自动运行。
 6. **可以恢复和局部返工：** 项目保存提示词、任务 ID、哈希、审批和中间素材，断网后可恢复，单镜失败只重做单镜。
@@ -119,7 +131,7 @@ Chat Animation 为兼容的 AI Agent 提供一套自包含的五阶段制作流�
 - **先看样片再付成本：** 图片、动画和声音都先生产一个样例，确认后才批量生成。
 - **以口播为时间标准：** 保持声音自然，通过画面变速对齐口播。
 - **动画更可控：** Agnes 使用首帧、尾帧和英文动作提示词生成视频。
-- **三种剪辑方式：** 支持硬切、独立转场和融合转场，默认使用一秒独立转场。
+- **三种剪辑方式：** 支持硬切、独立转场和融合转场；默认硬切，动画转场按需启用。
 - **可恢复：** 保存任务 ID、请求摘要、文件哈希、审核记录和本地素材，断网后优先恢复任务。
 - **可以局部返工：** 单独重做某个镜头、转场、音色或字幕，不必整批推倒重来。
 - **内置 Vox 风格：** 纸张拼贴、贴纸、半调网点、清晰视觉隐喻和克制的呼吸运动。
@@ -131,7 +143,7 @@ Chat Animation 为兼容的 AI Agent 提供一套自包含的五阶段制作流�
 - Codex，或其他能够读取并执行 `SKILL.md` 的 Agent
 - Python 3.9+
 - FFmpeg 与 FFprobe
-- Agnes API Key，用于图片和视频生成
+- Agnes 国际站或 CN 站 API Key，用于图片和视频生成；两站 Key 不通用
 - Xiaomi MiMo API Key，用于口播生成
 
 Agnes 和 MiMo 是外部服务，可能产生调用费用。不要把 API Key、用户音色样本或私人项目产物提交到公开仓库。
@@ -154,12 +166,14 @@ New-Item -ItemType Directory -Force "$env:USERPROFILE\.codex\skills" | Out-Null
 Copy-Item -Recurse -Force "skills\chat-animation" "$env:USERPROFILE\.codex\skills\chat-animation"
 ```
 
-通过环境变量或系统密钥存储配置凭据：
+首次使用，通过隐藏输入的命令配置一次：
 
 ```bash
-export AGNES_API_KEY="<your-key>"
-export MIMO_API_KEY="<your-key>"
+python3 skills/chat-animation/scripts/project.py configure-credentials \
+  --set agnes-cn --set mimo
 ```
+
+国际站使用 `--set agnes-global`，CN 站使用 `--set agnes-cn`。凭据保存在当前用户的 `~/.chat-animation/credentials.env`；Windows 对应 `%USERPROFILE%\.chat-animation\credentials.env`。macOS/Linux 使用 `0600` 权限，Windows 使用当前用户 ACL。后续自动读取，无需重复配置。
 
 第一次创建项目前运行预检：
 
