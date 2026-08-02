@@ -501,9 +501,11 @@ def main() -> None:
                 "CHAT_ANIMATION_AGNES_BASE_URL",
                 "CHAT_ANIMATION_AGNES_GLOBAL_BASE_URL",
                 "CHAT_ANIMATION_AGNES_CN_BASE_URL",
+                "CHAT_ANIMATION_CREDENTIALS_FILE",
             ):
                 clean_env.pop(name, None)
-            clean_env["CHAT_ANIMATION_DISABLE_KEYCHAIN"] = "1"
+            credentials_file = root / "user-home" / ".chat-animation" / "credentials.env"
+            clean_env["CHAT_ANIMATION_CREDENTIALS_FILE"] = str(credentials_file)
             blocked = run_cli(
                 [sys.executable, str(PROJECT_CLI), "preflight"],
                 env=clean_env,
@@ -511,14 +513,30 @@ def main() -> None:
             )
             assert "BLOCKED" in blocked.stdout
 
-            cn_env = dict(clean_env)
-            cn_env.update(
+            configure_env = dict(clean_env)
+            configure_env.update(
                 {
-                    "CHAT_ANIMATION_AGNES_REGION": "cn",
                     "AGNES_CN_API_KEY": "mock-cn-agnes-token",
                     "MIMO_API_KEY": "mock-mimo-token",
                 }
             )
+            configured = run_cli(
+                [
+                    sys.executable,
+                    str(PROJECT_CLI),
+                    "configure-credentials",
+                    "--from-env",
+                ],
+                env=configure_env,
+            )
+            configured_report = json.loads(configured.stdout)
+            assert configured_report["stored"] == ["AGNES_CN_API_KEY", "MIMO_API_KEY"]
+            assert credentials_file.is_file()
+            if os.name != "nt":
+                assert credentials_file.stat().st_mode & 0o777 == 0o600
+
+            cn_env = dict(clean_env)
+            cn_env["CHAT_ANIMATION_AGNES_REGION"] = "cn"
             cn_ready = run_cli(
                 [sys.executable, str(PROJECT_CLI), "preflight", "--json"],
                 env=cn_env,
@@ -529,6 +547,7 @@ def main() -> None:
                 "environment_variable": "AGNES_CN_API_KEY",
                 "region": "cn",
                 "base_url": "https://api.agnes-ai.cn",
+                "source": "credentials-file",
             }
             cn_env["CHAT_ANIMATION_DISABLE_FONT_DOWNLOAD"] = "1"
             cn_created = run_cli(
@@ -565,7 +584,7 @@ def main() -> None:
                 {
                     "AGNES_API_KEY": "mock-agnes-token",
                     "MIMO_API_KEY": "mock-mimo-token",
-                    "CHAT_ANIMATION_DISABLE_KEYCHAIN": "1",
+                    "CHAT_ANIMATION_AGNES_REGION": "global",
                     "CHAT_ANIMATION_AGNES_BASE_URL": state.base_url,
                     "CHAT_ANIMATION_MIMO_BASE_URL": state.base_url,
                     "CHAT_ANIMATION_DISABLE_FONT_DOWNLOAD": "1",
@@ -1820,6 +1839,7 @@ def main() -> None:
                     "default_hard_cut_transition_mode": True,
                     "agnes_cn_preflight_profile": True,
                     "agnes_region_persisted_in_project_and_provider": True,
+                    "cross_platform_one_time_credentials_file": True,
                     "separated_transition_runtime": True,
                     "narration_aware_motion_duration": True,
                     "default_voice_timing_needs_no_calibration": True,

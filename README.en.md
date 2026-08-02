@@ -170,21 +170,14 @@ New-Item -ItemType Directory -Force "$env:USERPROFILE\.codex\skills" | Out-Null
 Copy-Item -Recurse -Force "skills\chat-animation" "$env:USERPROFILE\.codex\skills\chat-animation"
 ```
 
-Configure credentials in your environment or operating-system secret store:
+Configure credentials once through hidden terminal prompts:
 
 ```bash
-# Global
-export CHAT_ANIMATION_AGNES_REGION="global"
-export AGNES_GLOBAL_API_KEY="<global-key>"
-
-# Or CN
-export CHAT_ANIMATION_AGNES_REGION="cn"
-export AGNES_CN_API_KEY="<cn-key>"
-
-export MIMO_API_KEY="<your-key>"
+python3 skills/chat-animation/scripts/project.py configure-credentials \
+  --set agnes-cn --set mimo
 ```
 
-Create Global keys at `platform.agnes-ai.com` and CN keys at `platform.agnes-ai.cn`. You can also select the project profile explicitly with `--agnes-region global|cn`; the project persists that choice so resumed tasks cannot cross regions.
+Use `--set agnes-global` for Global or `--set agnes-cn` for CN. Credentials are stored at `~/.chat-animation/credentials.env`, or `%USERPROFILE%\.chat-animation\credentials.env` on Windows. The file is protected with mode `0600` on macOS/Linux and a current-user ACL on Windows, then loaded automatically on future runs.
 
 Run the preflight before the first project:
 

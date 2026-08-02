@@ -22,6 +22,15 @@ description: "Turn a user’s idea, question, concept, article, or reference int
 
 ## 首次预检
 
+首次使用只配置一次凭据。命令在终端中隐藏输入，并保存到用户私有目录：macOS/Linux 为 `~/.chat-animation/credentials.env`，Windows 为 `%USERPROFILE%\\.chat-animation\\credentials.env`。
+
+```bash
+python3 <skill>/scripts/project.py configure-credentials \
+  --set agnes-global --set agnes-cn --set mimo
+```
+
+只配置实际使用的 Agnes 区域即可。后续自动读取该文件，环境变量只用于临时覆盖。
+
 运行：
 
 ```bash

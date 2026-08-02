@@ -15,16 +15,12 @@
 
 ### Agnes
 
-国际站与 CN 站账号、API Key 和请求域名彼此独立。选择其中一套：
+国际站与 CN 站账号、API Key 和请求域名彼此独立。首次使用通过隐藏输入的交互命令配置一次：
 
 ```bash
-# 国际站
-export CHAT_ANIMATION_AGNES_REGION="global"
-export AGNES_GLOBAL_API_KEY="<global-key>"
-
-# 或 CN 站
-export CHAT_ANIMATION_AGNES_REGION="cn"
-export AGNES_CN_API_KEY="<cn-key>"
+python3 <skill>/scripts/project.py configure-credentials --set agnes-global
+python3 <skill>/scripts/project.py configure-credentials --set agnes-cn
+python3 <skill>/scripts/project.py configure-credentials --set mimo
 ```
 
 国际站在 <https://platform.agnes-ai.com> 创建 Key；CN 站在 <https://platform.agnes-ai.cn> 创建 Key。旧的 `AGNES_API_KEY`、`AGNES_API_TOKEN`、`APIHUB_AGNES_API_KEY` 继续作为国际站兼容别名。
@@ -43,18 +39,22 @@ export MIMO_API_KEY="<your-key>"
 
 不要把 export 命令连同真实 key 写入项目文档、JSON、日志或聊天截图。
 
-### macOS 长期存储
+### 跨平台长期存储
 
-本 Skill 在环境变量缺失时，会只读查询当前用户的 macOS Keychain：
+凭据文件固定在当前用户目录：
 
 ```text
-service: chat-animation/AGNES_GLOBAL_API_KEY
-service: chat-animation/AGNES_CN_API_KEY
-service: chat-animation/MIMO_API_KEY
-account: 当前 macOS 用户
+macOS/Linux: ~/.chat-animation/credentials.env
+Windows:     %USERPROFILE%\.chat-animation\credentials.env
 ```
 
-可用 `security add-generic-password -U` 写入对应 service。脚本只把 key 保存在进程内存中，不输出到日志。设置 `CHAT_ANIMATION_DISABLE_KEYCHAIN=1` 可禁用此兜底，便于隔离测试。其他系统继续使用环境变量或系统密钥管理器。
+`configure-credentials` 原子写入该文件，不打印密钥。macOS/Linux 权限固定为 `0600`；Windows 使用 `icacls` 关闭继承并只授权当前用户。Skill 不读取 macOS Keychain，也不要求用户每次重新配置。设置 `CHAT_ANIMATION_CREDENTIALS_FILE` 可为测试或受管环境覆盖路径。
+
+环境变量优先于凭据文件，适合 CI 或一次性覆盖。已有环境变量可安全迁移：
+
+```bash
+python3 <skill>/scripts/project.py configure-credentials --from-env
+```
 
 ## 2. Agnes
 

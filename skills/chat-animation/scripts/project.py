@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
 import platform
@@ -15,6 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from common import (
+    AGNES_GLOBAL_TOKEN_NAMES,
     MIMO_TOKEN_NAMES,
     STAGES,
     SkillError,
@@ -48,6 +50,8 @@ from common import (
     slugify,
     stage_scene_ids,
     token_value,
+    token_source,
+    write_local_credentials,
     write_json,
 )
 from font_setup import font_status, initialize_project_font
@@ -257,10 +261,15 @@ def preflight_report(requested_agnes_region: Optional[str] = None) -> Dict[str, 
             "agnes": {
                 "configured": bool(agnes_name),
                 "environment_variable": agnes_name,
+                "source": token_source(agnes_name),
                 "region": selected_agnes_region,
                 "base_url": agnes_base_url(selected_agnes_region),
             },
-            "mimo": {"configured": bool(mimo_name), "environment_variable": mimo_name},
+            "mimo": {
+                "configured": bool(mimo_name),
+                "environment_variable": mimo_name,
+                "source": token_source(mimo_name),
+            },
         },
         "runtime": {
             "python": platform.python_version(),
@@ -341,6 +350,42 @@ def cmd_preflight(args: argparse.Namespace) -> None:
         raise SkillError(
             "Preflight is blocked. Configure the missing items before starting Stage 1."
         )
+
+
+def cmd_configure_credentials(args: argparse.Namespace) -> None:
+    updates: Dict[str, str] = {}
+    if args.from_env:
+        global_value = next(
+            (os.environ.get(name) for name in AGNES_GLOBAL_TOKEN_NAMES if os.environ.get(name)),
+            None,
+        )
+        if global_value:
+            updates["AGNES_GLOBAL_API_KEY"] = global_value
+        if os.environ.get("AGNES_CN_API_KEY"):
+            updates["AGNES_CN_API_KEY"] = os.environ["AGNES_CN_API_KEY"]
+        if os.environ.get("MIMO_API_KEY"):
+            updates["MIMO_API_KEY"] = os.environ["MIMO_API_KEY"]
+    for profile in args.set_profile or []:
+        name, prompt = {
+            "agnes-global": ("AGNES_GLOBAL_API_KEY", "Agnes Global API key: "),
+            "agnes-cn": ("AGNES_CN_API_KEY", "Agnes CN API key: "),
+            "mimo": ("MIMO_API_KEY", "Xiaomi MiMo API key: "),
+        }[profile]
+        updates[name] = getpass.getpass(prompt)
+    if not updates:
+        raise SkillError("No credentials were provided")
+    path = write_local_credentials(updates)
+    print(
+        json.dumps(
+            {
+                "credentials_file": str(path),
+                "stored": sorted(updates),
+                "protection": "windows-user-acl" if os.name == "nt" else "posix-0600",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 def next_project_path(root: Path, name: str) -> Tuple[Path, str]:
@@ -1554,6 +1599,25 @@ def build_parser() -> argparse.ArgumentParser:
     preflight.add_argument("--json", action="store_true")
     preflight.add_argument("--agnes-region", choices=("global", "cn"))
     preflight.set_defaults(func=cmd_preflight)
+
+    configure = sub.add_parser(
+        "configure-credentials",
+        help="Store provider credentials once in the private user credentials file.",
+    )
+    configure_mode = configure.add_mutually_exclusive_group(required=True)
+    configure_mode.add_argument(
+        "--from-env",
+        action="store_true",
+        help="Import currently exported credentials without printing them.",
+    )
+    configure_mode.add_argument(
+        "--set",
+        dest="set_profile",
+        action="append",
+        choices=("agnes-global", "agnes-cn", "mimo"),
+        help="Prompt securely for one profile; repeat to configure multiple profiles.",
+    )
+    configure.set_defaults(func=cmd_configure_credentials)
 
     init = sub.add_parser("init", help="Create a versioned project.")
     init.add_argument("--projects-root", required=True)

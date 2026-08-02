@@ -166,21 +166,14 @@ New-Item -ItemType Directory -Force "$env:USERPROFILE\.codex\skills" | Out-Null
 Copy-Item -Recurse -Force "skills\chat-animation" "$env:USERPROFILE\.codex\skills\chat-animation"
 ```
 
-通过环境变量或系统密钥存储配置凭据：
+首次使用，通过隐藏输入的命令配置一次：
 
 ```bash
-# 国际站
-export CHAT_ANIMATION_AGNES_REGION="global"
-export AGNES_GLOBAL_API_KEY="<global-key>"
-
-# 或 CN 站
-export CHAT_ANIMATION_AGNES_REGION="cn"
-export AGNES_CN_API_KEY="<cn-key>"
-
-export MIMO_API_KEY="<your-key>"
+python3 skills/chat-animation/scripts/project.py configure-credentials \
+  --set agnes-cn --set mimo
 ```
 
-国际站 Key 在 `platform.agnes-ai.com` 创建，CN 站 Key 在 `platform.agnes-ai.cn` 创建。初始化时也可用 `--agnes-region global|cn` 明确选择，项目会保存对应区域，避免恢复任务时串站。
+国际站使用 `--set agnes-global`，CN 站使用 `--set agnes-cn`。凭据保存在当前用户的 `~/.chat-animation/credentials.env`；Windows 对应 `%USERPROFILE%\.chat-animation\credentials.env`。macOS/Linux 使用 `0600` 权限，Windows 使用当前用户 ACL。后续自动读取，无需重复配置。
 
 第一次创建项目前运行预检：
 
